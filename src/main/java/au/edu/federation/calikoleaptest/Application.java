@@ -35,7 +35,9 @@ public class Application
     // ----- Static properties -----
 
     static Controller leapController = new Controller();
-    static Listener   leapListener   = new LeapListener();
+
+    static Listener   leapListener   = new LeapListener(LeapListener.ListenerType.USB_LISTENER);
+    //static Listener   leapListener   = new LeapListener(LeapListener.ListenerType.WEBSOCKET_LISTENER);
 
     public void run()
     {
