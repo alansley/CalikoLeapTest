@@ -22,22 +22,234 @@ public class Application
     int WIDTH = 800; int HEIGHT = 600; // Window width and height
     private long window;               // Window handle
 
-
-
     // 2D projection matrix. Params: Left, Right, Top, Bottom, Near, Far
-    Mat4f mvpMatrix  = Mat4f.createOrthographicProjectionMatrix(
+    static Mat4f mvpMatrix  = Mat4f.createOrthographicProjectionMatrix(
             -(float)WIDTH/2.0f,   (float)WIDTH/2.0f,
             (float)HEIGHT/2.0f, -(float)HEIGHT/2.0f,
             1.0f,               -1.0f );
 
+    private static Grid upperGrid, lowerGrid;
+
+    private static Line3D line;
+
+    static FabrikStructure3D handStructure = new FabrikStructure3D("hand structure");
+    static FabrikChain3D[] fingerChainArray;
+
     FabrikChain2D chain = new FabrikChain2D(); // Create a new 2D chain
 
-    // ----- Static properties -----
-
+    // ----- Leap Static properties -----
     static Controller leapController = new Controller();
-
     static Listener   leapListener   = new LeapListener(LeapListener.ListenerType.USB_LISTENER);
     //static Listener   leapListener   = new LeapListener(LeapListener.ListenerType.WEBSOCKET_LISTENER);
+    static Frame frame;
+    static Hand hand;
+    static Finger firstFinger;
+    static FingerList fingerList;
+
+
+    // ----- Constants -----
+    public static final float GOLDEN_RATIO = 1.6181033f;
+    public static final float HAND_RATIO   = 5.23606797f;
+
+    private static void drawFingersStockIK()
+    {
+        // Loop over all fingers
+        int fingerNumber = 0;
+        for (Finger f : fingerList)
+        {
+            //System.out.println("Num fingers visible: " + fingerList.count());
+
+            //System.out.println("Finger id: " + f.id() + " has length: " + f.length() );
+
+            Colour4f colour = new Colour4f();
+            switch (fingerNumber)
+            {
+                case 0:
+                    colour.set(1.0f, 0.0f, 0.0f, 1.0f);
+                    break;
+                case 1:
+                    colour.set(1.0f, 0.4f, 0.0f, 1.0f);
+                    break;
+                case 2:
+                    colour.set(1.0f, 1.0f, 0.0f, 1.0f);
+                    break;
+                case 3:
+                    colour.set(0.0f, 1.0f, 1.0f, 1.0f);
+                    break;
+                case 4:
+                    colour.set(0.0f, 0.0f, 1.0f, 1.0f);
+                    break;
+            }
+
+
+            int inToOut = 0;
+
+            // Bone order is:
+            // TYPE_METACARPAL   - prevjoint at wrist
+            // TYPE_PROXIMAL     - prevJoint at 'finger base'
+            // TYPE_INTERMEDIATE
+            // TYPE_DISTAL       - nextJoint at finger tip
+            for( Bone.Type boneType : Bone.Type.values() )
+            {
+                Bone bone = f.bone(boneType);
+
+
+                //System.out.println(fingerNumber + " is of type: " + boneType);
+
+                Vector boneStart = bone.prevJoint();
+                Vector boneEnd   = bone.nextJoint();
+                Vec3f start = new Vec3f( boneStart.getX(), boneStart.getY() - 200.0f, boneStart.getZ() );// * -1.0f );
+                Vec3f end   = new Vec3f( boneEnd.getX(),   boneEnd.getY() - 200.0f,   boneEnd.getZ()   );//* -1.0f );
+
+                line3D.draw(start, end, colour, 5.0f, mvpMatrix);
+
+                // ... Use the bone
+            }
+
+            ++fingerNumber;
+
+        }
+    }
+
+    private static void drawFingersCalikoIK()
+    {
+        // Loop over all fingers
+
+        for (int loop = 0; loop < 5; ++loop)
+        {
+            Colour4f colour = new Colour4f();
+            switch (loop)
+            {
+                case 0:
+                    colour.set(1.0f, 0.0f, 0.0f, 1.0f);
+                    break;
+                case 1:
+                    colour.set(1.0f, 0.4f, 0.0f, 1.0f);
+                    break;
+                case 2:
+                    colour.set(1.0f, 1.0f, 0.0f, 1.0f);
+                    break;
+                case 3:
+                    colour.set(0.0f, 1.0f, 1.0f, 1.0f);
+                    break;
+                case 4:
+                    colour.set(0.0f, 0.0f, 1.0f, 1.0f);
+                    break;
+            }
+
+
+            // Need to update chain details from frame (both base and tip)
+            // Then draw
+
+            //System.out.println("****************************Num bones is: " + fingerChainArray[loop].getChain().size());
+
+    		/*
+    		au.edu.federation.caliko.utils.Mat4f tempMvp = new au.edu.federation.caliko.utils.Mat4f();
+    		tempMvp.setFromArray(mvpMatrix.toArray());
+    		FabrikLine3D.draw(fingerChainArray[loop], tempMvp);
+    		*/
+
+            for (FabrikBone3D fb : fingerChainArray[loop].getChain())
+            {
+                //System.out.println("Attempting to draw fabrik finger: " + loop);
+
+                au.edu.federation.caliko.utils.Vec3f start = fb.getStartLocation();
+                au.edu.federation.caliko.utils.Vec3f end   = fb.getEndLocation();
+
+
+                Vec3f s = new Vec3f(start.x, start.y - 200.0f, start.z);
+                Vec3f e = new Vec3f(end.x, end.y - 200.0f, end.z);
+
+                //System.out.println("For this bone, s is: " + s.toString() + " and e is: " + e.toString());
+
+                line3D.draw(s, e, colour, 5.0f, mvpMatrix);
+            }
+
+
+        }
+    }
+
+    // Assign new frame by reference
+    public static void updateFrame(Frame f)
+    {
+        frame = f;
+
+        if (!calikoInitialised)
+        {
+            if ( frame != null && frame.isValid() )
+            {
+                int handCount = frame.hands().count();
+
+                if (handCount > 1)
+                {
+                    System.out.println("> 1 HAND DETECTED! WE ONLY DEAL WITH ONE HAND AT A TIME!");
+                }
+                else if (handCount < 1)
+                {
+                    calikoInitialised = false;
+                    //System.out.println("NO HANDS DETECTED!");
+                }
+                else
+                {
+                    // 	Get the first (and only) hand
+                    hand = frame.hands().get(0);
+
+                    // Get all fingers on the hand
+                    fingerList = hand.fingers();
+
+                    float confidence = hand.confidence();
+                    //System.out.println("Hand confidence = " + confidence);
+
+                    // Got a good, unobstructed view of the hand containing 5 fingers?
+                    if (confidence > 0.95f && fingerList.count() == 5)
+                    {
+
+                        // Initialise our fabrik chain array with finger details
+                        int count = 0;
+                        for (Finger finger : fingerList)
+                        {
+                            addFingerBonesToChain(finger, fingerChainArray[count]);
+                            ++count;
+                        }
+
+                        calikoInitialised = true;
+                    }
+                }
+
+
+            }
+        }
+        else // Initialised? Update base and tip locations!
+        {
+            int count = 0;
+            for (Finger finger : fingerList)
+            {
+                Vector leapBaseLocation = finger.bone(Bone.Type.TYPE_METACARPAL).prevJoint();
+                Vector leapTipLocation  = finger.bone(Bone.Type.TYPE_DISTAL).nextJoint();
+
+                Vec3f baseLoc = new Vec3f(leapBaseLocation.getX(), leapBaseLocation.getY(), leapBaseLocation.getZ());
+                Vec3f tipLoc  = new Vec3f(leapTipLocation.getX(), leapTipLocation.getY(), leapTipLocation.getZ());
+
+                fingerChainArray[count].setBaseLocation(baseLoc);
+                float solveDist = fingerChainArray[count].updateTarget(tipLoc); // IMPORTANT: This triggers IK configuration recalculation!
+
+                System.out.println("Got solve distance of: " + solveDist);
+
+                ++count;
+            }
+
+
+
+
+
+
+
+
+        }
+
+    }
+
+
 
     public void run()
     {

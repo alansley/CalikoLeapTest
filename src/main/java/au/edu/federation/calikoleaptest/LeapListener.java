@@ -73,6 +73,12 @@ public class LeapListener extends Listener
     {
         Frame leapFrame = controller.frame();
 
+        // Update from the USB obtained frame if we're using it...
+        if (leapListenerType == ListenerType.USB_LISTENER) {
+            // Update the Leap frame in the Application class
+            Application.updateFrame(controller.frame());
+        }
+
         System.out.println( "Frame id: "    + leapFrame.id()              +
                             ", timestamp: " + leapFrame.timestamp()       +
                             ", hands: "     + leapFrame.hands().count()   +
