@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="leap">
+    <CLASSES>
+      <root url="file://$PROJECT_DIR$/libs/leap" />
+    </CLASSES>
+    <JAVADOC />
+    <NATIVE>
+      <root url="file://$PROJECT_DIR$/libs/leap" />
+    </NATIVE>
+    <SOURCES />
+    <jarDirectory url="file://$PROJECT_DIR$/libs/leap" recursive="false" />
+  </library>
+</component>

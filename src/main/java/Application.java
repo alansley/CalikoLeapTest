@@ -9,6 +9,8 @@ import au.edu.federation.caliko.*;
 import au.edu.federation.utils.*;
 import au.edu.federation.caliko.visualisation.*;
 
+import com.leapmotion.leap.*;
+
 public class Application
 {
     // We need to strongly reference callback instances.
@@ -18,13 +20,20 @@ public class Application
     int WIDTH = 800; int HEIGHT = 600; // Window width and height
     private long window;               // Window handle
 
-    FabrikChain2D chain = new FabrikChain2D(); // Create a new 2D chain
+
 
     // 2D projection matrix. Params: Left, Right, Top, Bottom, Near, Far
     Mat4f mvpMatrix  = Mat4f.createOrthographicProjectionMatrix(
             -(float)WIDTH/2.0f,   (float)WIDTH/2.0f,
             (float)HEIGHT/2.0f, -(float)HEIGHT/2.0f,
             1.0f,               -1.0f );
+
+    FabrikChain2D chain = new FabrikChain2D(); // Create a new 2D chain
+
+    // ----- Static properties -----
+
+    static Controller leapController = new Controller();
+    static Listener   leapListener   = new LeapListener();
 
     public void run()
     {
@@ -55,6 +64,8 @@ public class Application
 
     private void init()
     {
+        // ----- LWJGL / GLFW / OpenGL Setup -----
+
         // Setup an error callback. The default implementation
         // will print the error message in System.err.
         glfwSetErrorCallback(errorCB = GLFWErrorCallback.createPrint(System.err));
@@ -125,6 +136,12 @@ public class Application
 
     public static void main(String[] args)
     {
+        // Bind a listener to the Leap device
+        leapController.addListener(leapListener);
+
         new Application().run();
+
+        // Remove the listener from the Leap device
+        leapController.removeListener(leapListener);
     }
 }
