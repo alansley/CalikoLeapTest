@@ -1,3 +1,5 @@
+package au.edu.federation.calikoleaptest;
+
 import org.lwjgl.glfw.*;
 import org.lwjgl.opengl.*;
 

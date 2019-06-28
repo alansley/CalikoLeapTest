@@ -1,3 +1,5 @@
+package au.edu.federation.calikoleaptest;
+
 import com.leapmotion.leap.Controller;
 import com.leapmotion.leap.Frame;
 import com.leapmotion.leap.Listener;
