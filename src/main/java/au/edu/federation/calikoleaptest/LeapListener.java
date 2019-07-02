@@ -11,14 +11,14 @@ import java.net.URISyntaxException;
 
 public class LeapListener extends Listener
 {
-    // Socket we're either going to listen on
-    private static LeapWebSocket leapWebSocket;
-
     // A listener is either a a USB listener or a websocket listener
     public enum ListenerType { USB_LISTENER, WEBSOCKET_LISTENER }
 
-    // Store a listener type
+    // Store our listener type
     private static ListenerType leapListenerType;
+
+    // Websocket we can listen on if we're not a USB listener
+    private static LeapWebSocket leapWebSocket;
 
     // Constructor
     LeapListener(ListenerType lt)
@@ -36,12 +36,9 @@ public class LeapListener extends Listener
         System.out.println("LeapListener initialized.");
 
         // If we're using the WebSocket interface then initialise a LeapWebSocket
-        //
-        // Note: We could just as easily perform this check with "listenerType != ListenerType.USB_LISTENER" - but this requires
-        // (arguably) less thinking, and this check only happens once, so there's no point optimising it here.
         if (leapListenerType == ListenerType.WEBSOCKET_LISTENER)
         {
-            // Initialise the leap socket to capture the websocket data. Default port is 6437.
+            // Initialise the leap socket to capture the web socket data. Default port is 6437.
             try
             {
                 leapWebSocket = new LeapWebSocket( new URI( "ws://localhost:6437" ), new Draft_6455() );
@@ -53,7 +50,6 @@ public class LeapListener extends Listener
             }
         }
     }
-
 
     @Override
     public void onConnect(Controller controller)
@@ -73,16 +69,14 @@ public class LeapListener extends Listener
     {
         Frame leapFrame = controller.frame();
 
-        // Update from the USB obtained frame if we're using it...
-        if (leapListenerType == ListenerType.USB_LISTENER) {
-            // Update the Leap frame in the Application class
-            Application.updateFrame(controller.frame());
+        // Update from the USB obtained frame if that's what we're listening to...
+        if (leapListenerType == ListenerType.USB_LISTENER)
+        {
+            Application.updateFrame(leapFrame);
+            System.out.println("Updating frame @ " + leapFrame.timestamp());
         }
 
-        System.out.println( "Frame id: "    + leapFrame.id()              +
-                            ", timestamp: " + leapFrame.timestamp()       +
-                            ", hands: "     + leapFrame.hands().count()   +
-                            ", fingers: "   + leapFrame.fingers().count() );
+        System.out.println( "Frame id: " + leapFrame.id() + ", hands: " + leapFrame.hands().count() + ", fingers: " + leapFrame.fingers().count() );
     }
 
     @Override

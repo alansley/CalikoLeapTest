@@ -7,4 +7,4 @@ Note: Linux SDK only contains .deb files for Ubuntu. For Arch Linux, install 'le
 
 If you're one of my PhD examiners I'm so sorry but I'm running late with this =/
 
-Expected complete July 1st 2019.
+Expected complete early July 2019.

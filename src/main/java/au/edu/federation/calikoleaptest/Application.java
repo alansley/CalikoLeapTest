@@ -19,23 +19,28 @@ public class Application
     private GLFWErrorCallback errorCB;
     private GLFWKeyCallback   keyCB;
 
-    int WIDTH = 800; int HEIGHT = 600; // Window width and height
-    private long window;               // Window handle
+    static int WIDTH  = 800; // Window width
+    static int HEIGHT = 600; // Window height
+    private long window;     // Window handle
 
-    // 2D projection matrix. Params: Left, Right, Top, Bottom, Near, Far
-    static Mat4f mvpMatrix  = Mat4f.createOrthographicProjectionMatrix(
-            -(float)WIDTH/2.0f,   (float)WIDTH/2.0f,
-            (float)HEIGHT/2.0f, -(float)HEIGHT/2.0f,
-            1.0f,               -1.0f );
+    static Mat4f viewMatrix = new Mat4f(1.0f);
 
+    // 3D projection matrix. Params: Left, Right, Top, Bottom, Near, Far
+    static Mat4f projMatrix  = Mat4f.createPerspectiveProjectionMatrix(90.0f, 1.66f, 0.1f, 1000.0f);
+
+    // ModelViewProjectionMatrix
+    static Mat4f mvpMatrix;
+
+    // Grids to give perspective
     private static Grid upperGrid, lowerGrid;
 
     private static Line3D line;
 
-    static FabrikStructure3D handStructure = new FabrikStructure3D("hand structure");
-    static FabrikChain3D[] fingerChainArray;
+    static Colour4f leapIKHandColour   = Utils.RED;
+    static Colour4f calikoIKHandColour = Utils.BLUE;
 
-    FabrikChain2D chain = new FabrikChain2D(); // Create a new 2D chain
+    static FabrikStructure3D rightHandStructure = new FabrikStructure3D("right hand structure");
+    static FabrikChain3D[]   rightFingersArray  = new FabrikChain3D[5];
 
     // ----- Leap Static properties -----
     static Controller leapController = new Controller();
@@ -48,124 +53,51 @@ public class Application
 
 
     // ----- Constants -----
-    public static final float GOLDEN_RATIO = 1.6181033f;
-    public static final float HAND_RATIO   = 5.23606797f;
+    public static final float GOLDEN_RATIO       = 1.6181033f;
+    public static final float HAND_RATIO         = 5.23606797f;
+    public static final float VERTICAL_OFFSET    = 200.0f;
+    public static final float LEAP_DRAW_OFFSET   = -150.0f;
+    public static final float CALIKO_DRAW_OFFSET = 150.0f;
 
-    private static void drawFingersStockIK()
+    private static void drawFingersLeapIK()
     {
-        // Loop over all fingers
-        int fingerNumber = 0;
+        // Loop over all fingers in the list of fingers
         for (Finger f : fingerList)
         {
-            //System.out.println("Num fingers visible: " + fingerList.count());
-
-            //System.out.println("Finger id: " + f.id() + " has length: " + f.length() );
-
-            Colour4f colour = new Colour4f();
-            switch (fingerNumber)
-            {
-                case 0:
-                    colour.set(1.0f, 0.0f, 0.0f, 1.0f);
-                    break;
-                case 1:
-                    colour.set(1.0f, 0.4f, 0.0f, 1.0f);
-                    break;
-                case 2:
-                    colour.set(1.0f, 1.0f, 0.0f, 1.0f);
-                    break;
-                case 3:
-                    colour.set(0.0f, 1.0f, 1.0f, 1.0f);
-                    break;
-                case 4:
-                    colour.set(0.0f, 0.0f, 1.0f, 1.0f);
-                    break;
-            }
-
-
-            int inToOut = 0;
-
-            // Bone order is:
-            // TYPE_METACARPAL   - prevjoint at wrist
+            // Loop over finger bones drawing each. Bone order is:
+            // TYPE_METACARPAL   - prevJoint at wrist
             // TYPE_PROXIMAL     - prevJoint at 'finger base'
-            // TYPE_INTERMEDIATE
+            // TYPE_INTERMEDIATE -
             // TYPE_DISTAL       - nextJoint at finger tip
             for( Bone.Type boneType : Bone.Type.values() )
             {
                 Bone bone = f.bone(boneType);
 
-
-                //System.out.println(fingerNumber + " is of type: " + boneType);
-
                 Vector boneStart = bone.prevJoint();
                 Vector boneEnd   = bone.nextJoint();
-                Vec3f start = new Vec3f( boneStart.getX(), boneStart.getY() - 200.0f, boneStart.getZ() );// * -1.0f );
-                Vec3f end   = new Vec3f( boneEnd.getX(),   boneEnd.getY() - 200.0f,   boneEnd.getZ()   );//* -1.0f );
+                Vec3f start      = new Vec3f( boneStart.getX() + LEAP_DRAW_OFFSET, boneStart.getY() - VERTICAL_OFFSET, boneStart.getZ() );
+                Vec3f end        = new Vec3f( boneEnd.getX()   + LEAP_DRAW_OFFSET, boneEnd.getY()   - VERTICAL_OFFSET, boneEnd.getZ()   );
 
-                line3D.draw(start, end, colour, 5.0f, mvpMatrix);
-
-                // ... Use the bone
+                line.draw(start, end, leapIKHandColour, 5.0f, mvpMatrix);
             }
 
-            ++fingerNumber;
-
-        }
+        } // End of loop over fingers
     }
 
     private static void drawFingersCalikoIK()
     {
-        // Loop over all fingers
-
-        for (int loop = 0; loop < 5; ++loop)
+        // Loop over all fingers in the list of fingers
+        for (Finger f : fingerList)
         {
-            Colour4f colour = new Colour4f();
-            switch (loop)
-            {
-                case 0:
-                    colour.set(1.0f, 0.0f, 0.0f, 1.0f);
-                    break;
-                case 1:
-                    colour.set(1.0f, 0.4f, 0.0f, 1.0f);
-                    break;
-                case 2:
-                    colour.set(1.0f, 1.0f, 0.0f, 1.0f);
-                    break;
-                case 3:
-                    colour.set(0.0f, 1.0f, 1.0f, 1.0f);
-                    break;
-                case 4:
-                    colour.set(0.0f, 0.0f, 1.0f, 1.0f);
-                    break;
-            }
+            // Get the tip and base location of the finger
+            Vector tipLocation  = f.tipPosition();
+            Vector baseLocation = f.direction().opposite().times( f.length() );
 
+            // Use golden-ratio based anatomical model to calculate joint locations.
+            Vec3f tip  = new Vec3f( tipLocation.getX() + CALIKO_DRAW_OFFSET,  tipLocation.getY()  - VERTICAL_OFFSET, tipLocation.getZ()  );
+            Vec3f base = new Vec3f( baseLocation.getX() + CALIKO_DRAW_OFFSET, baseLocation.getY() - VERTICAL_OFFSET, baseLocation.getZ() );
 
-            // Need to update chain details from frame (both base and tip)
-            // Then draw
-
-            //System.out.println("****************************Num bones is: " + fingerChainArray[loop].getChain().size());
-
-    		/*
-    		au.edu.federation.caliko.utils.Mat4f tempMvp = new au.edu.federation.caliko.utils.Mat4f();
-    		tempMvp.setFromArray(mvpMatrix.toArray());
-    		FabrikLine3D.draw(fingerChainArray[loop], tempMvp);
-    		*/
-
-            for (FabrikBone3D fb : fingerChainArray[loop].getChain())
-            {
-                //System.out.println("Attempting to draw fabrik finger: " + loop);
-
-                au.edu.federation.caliko.utils.Vec3f start = fb.getStartLocation();
-                au.edu.federation.caliko.utils.Vec3f end   = fb.getEndLocation();
-
-
-                Vec3f s = new Vec3f(start.x, start.y - 200.0f, start.z);
-                Vec3f e = new Vec3f(end.x, end.y - 200.0f, end.z);
-
-                //System.out.println("For this bone, s is: " + s.toString() + " and e is: " + e.toString());
-
-                line3D.draw(s, e, colour, 5.0f, mvpMatrix);
-            }
-
-
+            line.draw(tip, base, calikoIKHandColour, 5.0f, mvpMatrix);
         }
     }
 
@@ -174,93 +106,22 @@ public class Application
     {
         frame = f;
 
-        if (!calikoInitialised)
+        if (frame != null && frame.isValid() && frame.hands().count() > 0)
         {
-            if ( frame != null && frame.isValid() )
-            {
-                int handCount = frame.hands().count();
+            // 	Get the leftmost hand
+            hand = frame.hands().leftmost();
 
-                if (handCount > 1)
-                {
-                    System.out.println("> 1 HAND DETECTED! WE ONLY DEAL WITH ONE HAND AT A TIME!");
-                }
-                else if (handCount < 1)
-                {
-                    calikoInitialised = false;
-                    //System.out.println("NO HANDS DETECTED!");
-                }
-                else
-                {
-                    // 	Get the first (and only) hand
-                    hand = frame.hands().get(0);
-
-                    // Get all fingers on the hand
-                    fingerList = hand.fingers();
-
-                    float confidence = hand.confidence();
-                    //System.out.println("Hand confidence = " + confidence);
-
-                    // Got a good, unobstructed view of the hand containing 5 fingers?
-                    if (confidence > 0.95f && fingerList.count() == 5)
-                    {
-
-                        // Initialise our fabrik chain array with finger details
-                        int count = 0;
-                        for (Finger finger : fingerList)
-                        {
-                            addFingerBonesToChain(finger, fingerChainArray[count]);
-                            ++count;
-                        }
-
-                        calikoInitialised = true;
-                    }
-                }
-
-
-            }
+            // Get all fingers on the hand
+            fingerList = hand.fingers();
         }
-        else // Initialised? Update base and tip locations!
+        else
         {
-            int count = 0;
-            for (Finger finger : fingerList)
-            {
-                Vector leapBaseLocation = finger.bone(Bone.Type.TYPE_METACARPAL).prevJoint();
-                Vector leapTipLocation  = finger.bone(Bone.Type.TYPE_DISTAL).nextJoint();
-
-                Vec3f baseLoc = new Vec3f(leapBaseLocation.getX(), leapBaseLocation.getY(), leapBaseLocation.getZ());
-                Vec3f tipLoc  = new Vec3f(leapTipLocation.getX(), leapTipLocation.getY(), leapTipLocation.getZ());
-
-                fingerChainArray[count].setBaseLocation(baseLoc);
-                float solveDist = fingerChainArray[count].updateTarget(tipLoc); // IMPORTANT: This triggers IK configuration recalculation!
-
-                System.out.println("Got solve distance of: " + solveDist);
-
-                ++count;
-            }
-
-
-
-
-
-
-
-
+            //System.out.println("Got a frame, but no hands visible.");
         }
-
     }
-
-
 
     public void run()
     {
-        // Create our chain
-        FabrikBone2D base = new FabrikBone2D(new Vec2f(), new Vec2f(0.0f, 50.0f));
-        chain.addBone(base);
-        for (int boneLoop = 0; boneLoop < 5; ++boneLoop)
-        {
-            chain.addConsecutiveBone(new Vec2f(0.0f, 1.0f), 50.0f);
-        }
-
         try
         {
             init();
@@ -292,7 +153,7 @@ public class Application
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); // the window will be resizable
 
         // Create the window
-        window = glfwCreateWindow(WIDTH, HEIGHT, "Hello, Caliko!", NULL, NULL);
+        window = glfwCreateWindow(WIDTH, HEIGHT, "Caliko Leap Test v0.1 | Left/Blue hand is LeapIK, Right/Red hand is Caliko IK", NULL, NULL);
         if (window == NULL)
             throw new RuntimeException("Failed to create the GLFW window");
 
@@ -307,25 +168,32 @@ public class Application
         });
 
         // Get the resolution of the primary monitor
-        GLFWVidMode vidmode = glfwGetVideoMode( glfwGetPrimaryMonitor() );
+        GLFWVidMode vidMode = glfwGetVideoMode( glfwGetPrimaryMonitor() );
 
         // Center our window
-        glfwSetWindowPos(window, (vidmode.width() - WIDTH) / 2,
-                (vidmode.height() - HEIGHT) / 2);
+        glfwSetWindowPos(window, (vidMode.width() - WIDTH) / 2,(vidMode.height() - HEIGHT) / 2);
 
         glfwMakeContextCurrent(window); // Make the OpenGL context current
         glfwSwapInterval(1);            // Enable v-sync
         glfwShowWindow(window);         // Make the window visible
+
+        // This line is critical for LWJGL's interoperation with GLFW's OpenGL context, or any context that is managed
+        // externally. LWJGL detects the context that is current in the current thread, creates the GLCapabilities
+        // instance and makes the OpenGL bindings available for use.
+        GL.createCapabilities();
+
+        // ----- Setup grids -----
+        upperGrid = new Grid(1000.0f, 1000.0f, 300.0f, 20);
+        lowerGrid = new Grid(1000.0f, 1000.0f, -300.0f, 20);
+
+        // Move view matrix backwards and generate MVP matrix
+        viewMatrix.translate(0.0f, 0.0f,-300.0f);
+        mvpMatrix = projMatrix.times(viewMatrix);
     }
 
     private void loop()
     {
-        // This line is critical for LWJGL's interoperation with GLFW's
-        // OpenGL context, or any context that is managed externally.
-        // LWJGL detects the context that is current in the current thread,
-        // creates the GLCapabilities instance and makes the OpenGL
-        // bindings available for use.
-        GL.createCapabilities();
+
 
         // Set the clear color
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -333,20 +201,25 @@ public class Application
         Vec2f offset = new Vec2f(150.0f, 0.0f);
         Vec2f target = new Vec2f(100.0f, 100.0f);
 
-        // Run the rendering loop until the user has attempted to close
-        // the window or has pressed the ESCAPE key.
-        while ( glfwWindowShouldClose(window) == false ) {
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear buffers
-            chain.solveForTarget( target.plus(offset) );        // Solve the chain
-            FabrikLine2D.draw(chain, 3.0f, mvpMatrix);          // Draw the chain
-            glfwSwapBuffers(window);                            // Swap colour buf.
+        line = new Line3D();
 
-            // Rotate the offset 1 degree per frame
-            offset = Vec2f.rotateDegs(offset, 1.0f);
+        // Run the rendering loop until the user has attempted to close the window or has pressed the ESCAPE key.
+        while ( glfwWindowShouldClose(window) == false )
+        {
+            // Clear colour and depth buffers + draw perspective grids
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            upperGrid.draw(mvpMatrix);
+            lowerGrid.draw(mvpMatrix);
 
-            // Poll for window events. The key callback above will only be
-            // invoked during this call.
-            glfwPollEvents();
+            // Got a hand containing fingers? Draw!
+            if (fingerList != null && !fingerList.isEmpty())
+            {
+                drawFingersLeapIK();
+                drawFingersCalikoIK();
+            }
+
+            glfwSwapBuffers(window); // Swap colour buf.
+            glfwPollEvents();        // Poll for events.
         }
     }
 
