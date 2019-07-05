@@ -39,8 +39,8 @@ public class Application
     static Colour4f leapIKHandColour   = Utils.RED;
     static Colour4f calikoIKHandColour = Utils.BLUE;
 
-    static FabrikStructure3D rightHandStructure = new FabrikStructure3D("right hand structure");
-    static FabrikChain3D[]   rightFingersArray  = new FabrikChain3D[5];
+    //static FabrikStructure3D rightHandStructure = new FabrikStructure3D("right hand structure");
+    static FabrikChain3D[] fingerChain = new FabrikChain3D[5];
 
     // ----- Leap Static properties -----
     static Controller leapController = new Controller();
@@ -53,8 +53,15 @@ public class Application
 
 
     // ----- Constants -----
-    public static final float GOLDEN_RATIO       = 1.6181033f;
-    public static final float HAND_RATIO         = 5.23606797f;
+    public static final float GOLDEN_RATIO              = 1.6181033f;
+    public static final float HAND_RATIO                = 5.23606797f;
+    public static final float DISTAL_RATIO              = 1.0f / HAND_RATIO;
+    public static final float PROXIMAL_RATIO            = GOLDEN_RATIO / HAND_RATIO;
+    public static final float METACARPOPHALANGEAL_RATIO = (GOLDEN_RATIO * GOLDEN_RATIO) / HAND_RATIO;
+    public static final float CARPOMETACARPEL_RATIO     = (GOLDEN_RATIO * GOLDEN_RATIO * GOLDEN_RATIO) / HAND_RATIO;
+
+
+
     public static final float VERTICAL_OFFSET    = 200.0f;
     public static final float LEAP_DRAW_OFFSET   = -150.0f;
     public static final float CALIKO_DRAW_OFFSET = 150.0f;
@@ -66,10 +73,11 @@ public class Application
         {
             // Loop over finger bones drawing each. Bone order is:
             // TYPE_METACARPAL   - prevJoint at wrist
-            // TYPE_PROXIMAL     - prevJoint at 'finger base'
-            // TYPE_INTERMEDIATE -
-            // TYPE_DISTAL       - nextJoint at finger tip
-            for( Bone.Type boneType : Bone.Type.values() )
+            // TYPE_PROXIMAL     - prevJoint at 'finger base'   - this is the third 'base-of-finger' joint
+            // TYPE_INTERMEDIATE -                              - this is the second 'knuckle' joint
+            // TYPE_DISTAL       - nextJoint at finger tip      - this is the first joint, closest to fingertip
+            int count = 0;
+            for ( Bone.Type boneType : Bone.Type.values() )
             {
                 Bone bone = f.bone(boneType);
 
@@ -78,7 +86,15 @@ public class Application
                 Vec3f start      = new Vec3f( boneStart.getX() + LEAP_DRAW_OFFSET, boneStart.getY() - VERTICAL_OFFSET, boneStart.getZ() );
                 Vec3f end        = new Vec3f( boneEnd.getX()   + LEAP_DRAW_OFFSET, boneEnd.getY()   - VERTICAL_OFFSET, boneEnd.getZ()   );
 
-                line.draw(start, end, leapIKHandColour, 5.0f, mvpMatrix);
+                if (count % 2 == 0)
+                {
+                    line.draw(start, end, Utils.BLUE, 5.0f, mvpMatrix);
+                }
+                else
+                {
+                    line.draw(start, end, Utils.MID_BLUE, 5.0f, mvpMatrix);
+                }
+                ++count;
             }
 
         } // End of loop over fingers
@@ -87,6 +103,7 @@ public class Application
     private static void drawFingersCalikoIK()
     {
         // Loop over all fingers in the list of fingers
+        int count = 0;
         for (Finger f : fingerList)
         {
             // Get the tip and base location of the finger
@@ -94,10 +111,76 @@ public class Application
             Vector baseLocation = f.direction().opposite().times( f.length() );
 
             // Use golden-ratio based anatomical model to calculate joint locations.
-            Vec3f tip  = new Vec3f( tipLocation.getX() + CALIKO_DRAW_OFFSET,  tipLocation.getY()  - VERTICAL_OFFSET, tipLocation.getZ()  );
-            Vec3f base = new Vec3f( baseLocation.getX() + CALIKO_DRAW_OFFSET, baseLocation.getY() - VERTICAL_OFFSET, baseLocation.getZ() );
+            //Vec3f tip  = new Vec3f( tipLocation.getX() + CALIKO_DRAW_OFFSET,  tipLocation.getY()  - VERTICAL_OFFSET, tipLocation.getZ()  );
+            //Vec3f base = new Vec3f( baseLocation.getX() + CALIKO_DRAW_OFFSET, baseLocation.getY() - VERTICAL_OFFSET, baseLocation.getZ() );
 
-            line.draw(tip, base, calikoIKHandColour, 5.0f, mvpMatrix);
+            // Create joints for fingers in a straight line along finger direction then solve them to get the curve
+            //Vec3f tip = new Vec3f(tipLocation.getX(), tipLocation.getY(), tipLocation.getZ());
+            //Vec3f direction = new Vec3f(f.direction)
+            //Vec3f distalJoint = new Vec
+
+            Vec3f  tipToBaseDir = new Vec3f( f.direction().opposite().getX(), f.direction().opposite().getY(), f.direction().opposite().getZ()  );
+            float  len          = f.length();
+            //System.out.println(count + " " + len);
+
+            // Construct joint locations using golden ration based anatomical model
+            Vec3f tip                 = new Vec3f( tipLocation.getX(), tipLocation.getY(), tipLocation.getZ()                       );
+            Vec3f distal              = new Vec3f( tip.plus( tipToBaseDir.times(DISTAL_RATIO).times(len)                          ) );
+            Vec3f proximal            = new Vec3f( distal.plus( tipToBaseDir.times(PROXIMAL_RATIO).times(len)                     ) );
+            Vec3f metacarpophalangeal = new Vec3f( proximal.plus( tipToBaseDir.times(METACARPOPHALANGEAL_RATIO).times(len)        ) );
+
+            // The location of the metacrpophalangeal joint is fixed relative to the hand, so we obtain it by taking a direction from the fingertip to the hand
+            Hand h = frame.hands().rightmost();
+            Vector handPosition = h.palmPosition();
+            Vec3f armDir = new Vec3f(h.arm().direction().opposite().getX(),h.arm().direction().opposite().getY(), h.arm().direction().opposite().getZ() );
+
+            Vec3f carpometacarpel     = new Vec3f( metacarpophalangeal.plus( armDir.times(CARPOMETACARPEL_RATIO).times(len) ) );
+
+
+
+            System.out.println(handPosition);
+
+            //Vec3f carpometacarpel     = new Vec3f( handPosition.getX(), handPosition.getY(), handPosition.getZ() );
+
+            // Push to the right and up
+            tip.x                 += CALIKO_DRAW_OFFSET;
+            tip.y                 -= VERTICAL_OFFSET;
+            distal.x              += CALIKO_DRAW_OFFSET;
+            distal.y              -= VERTICAL_OFFSET;
+            proximal.x            += CALIKO_DRAW_OFFSET;
+            proximal.y            -= VERTICAL_OFFSET;
+            metacarpophalangeal.x += CALIKO_DRAW_OFFSET;
+            metacarpophalangeal.y -= VERTICAL_OFFSET;
+            carpometacarpel.x     += CALIKO_DRAW_OFFSET;
+            carpometacarpel.y     -= VERTICAL_OFFSET;
+
+            FabrikBone3D carpoBone  = new FabrikBone3D(carpometacarpel, metacarpophalangeal); carpoBone.setColour(Utils.RED);
+            FabrikBone3D metaBone   = new FabrikBone3D(metacarpophalangeal, proximal);        metaBone.setColour(Utils.MID_RED);
+            FabrikBone3D distilBone = new FabrikBone3D(proximal, distal);                     distilBone.setColour(Utils.RED);
+            FabrikBone3D tipBone    = new FabrikBone3D(distal, tip);                          tipBone.setColour(Utils.MID_RED);
+
+            fingerChain[count] = new FabrikChain3D();
+
+            // Only add a 4th segment if we are NOT a thumb!
+            if (count != 0) { fingerChain[count].addBone(carpoBone); }
+
+            fingerChain[count].addBone(metaBone);
+            fingerChain[count].addBone(distilBone);
+            fingerChain[count].addBone(tipBone);
+
+            fingerChain[count].solveForTarget( tip.minus( tipToBaseDir.times( f.length() * 0.09f) ) );
+
+            FabrikLine3D.draw(fingerChain[count], 5.0f, mvpMatrix);
+
+            /*
+            line.draw(tip, distal, Utils.RED, 5.0f, mvpMatrix);
+            line.draw(distal, proximal, Utils.GREEN, 5.0f, mvpMatrix);
+            line.draw(proximal, metacarpophalangeal, Utils.BLUE, 5.0f, mvpMatrix);
+            line.draw(metacarpophalangeal, carpometacarpel, Utils.YELLOW, 5.0f, mvpMatrix);
+             */
+
+            // Increment counter to move to next finger on next pass
+            ++count;
         }
     }
 
@@ -150,12 +233,16 @@ public class Application
         // Initialize GLFW. Most GLFW functions will not work before doing this.
         if ( !glfwInit() )
             throw new IllegalStateException("Unable to initialize GLFW");
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); // the window will be resizable
+
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); // The window will be resizable. NOTE: Window hints must be provided before the window is created.
+        glfwWindowHint(GLFW_SAMPLES, 8);     // Ask for 8x Anti-aliasing (no guarantee we'll get it, but we can ask for it).
 
         // Create the window
         window = glfwCreateWindow(WIDTH, HEIGHT, "Caliko Leap Test v0.1 | Left/Blue hand is LeapIK, Right/Red hand is Caliko IK", NULL, NULL);
         if (window == NULL)
-            throw new RuntimeException("Failed to create the GLFW window");
+        {
+            throw new RuntimeException("Failed to create the GLFW window.");
+        }
 
         // Setup a key callback
         glfwSetKeyCallback(window, keyCB = new GLFWKeyCallback() {
@@ -187,24 +274,28 @@ public class Application
         lowerGrid = new Grid(1000.0f, 1000.0f, -300.0f, 20);
 
         // Move view matrix backwards and generate MVP matrix
-        viewMatrix.translate(0.0f, 0.0f,-300.0f);
+        viewMatrix.translate(0.0f, 0.0f,-200.0f);
         mvpMatrix = projMatrix.times(viewMatrix);
+
+        // Create a Line3D we'll use to draw things (we have to wait until we have a valid OpenGL context to do this)
+        line = new Line3D();
+
+        // Create empty FabrikChain3D objects
+        for (int loop = 0; loop < 5; ++loop)
+        {
+            fingerChain[loop] = new FabrikChain3D();
+        }
     }
 
     private void loop()
     {
-
-
         // Set the clear color
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
-        Vec2f offset = new Vec2f(150.0f, 0.0f);
-        Vec2f target = new Vec2f(100.0f, 100.0f);
 
-        line = new Line3D();
 
         // Run the rendering loop until the user has attempted to close the window or has pressed the ESCAPE key.
-        while ( glfwWindowShouldClose(window) == false )
+        while ( !glfwWindowShouldClose(window) )
         {
             // Clear colour and depth buffers + draw perspective grids
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

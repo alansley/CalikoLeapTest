@@ -1,10 +1,8 @@
 # CalikoLeapTest
-A demonstration of using the Caliko inverse kinematics library to visualise Leap hand data.
+A demonstration of using the Caliko inverse kinematics library to visualise sensor data from a Leap Motion 'Leap' sensor.
 
 Leap Motion v2 SDK download: https://developer-archive.leapmotion.com/v2
 
 Note: Linux SDK only contains .deb files for Ubuntu. For Arch Linux, install 'leap-motion-driver' from the AUR: https://aur.archlinux.org/packages/leap-motion-driver/
 
-If you're one of my PhD examiners I'm so sorry but I'm running late with this =/
-
-Expected complete early July 2019.
+TODO: Tie in recorded leap data so it can be used without a Leap sensor.
